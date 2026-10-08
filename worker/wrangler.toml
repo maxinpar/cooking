@@ -1,0 +1,8 @@
+name = "cooking-votes"
+main = "vote.js"
+compatibility_date = "2026-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cooking-votes"
+database_id = "PASTE_DATABASE_ID_HERE"

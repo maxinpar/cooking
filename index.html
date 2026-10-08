@@ -8,6 +8,22 @@
 <script>
   // Live data: public Google Sheet, "Public" tab, as CSV.
   const CSV_URL = "https://docs.google.com/spreadsheets/d/1f557VxAxSyOM9xvwQzXwrZx2TLdZa1gD2oo1UwQ-5FI/gviz/tq?tqx=out:csv&sheet=Public";
+  // Votes: URL of the deployed Cloudflare Worker in worker/ (leave empty to hide voting).
+  const VOTE_URL = "";
+  // Chapters of the book, with the page each one starts on.
+  const CHAPTERS = [
+    [1, "Everyday Food"],
+    [52, "Effortless"],
+    [92, "Stir-fries & Noodles"],
+    [126, "What Do I Do With a Piece Of…"],
+    [148, "Pasta & Cosy Food"],
+    [180, "Meal-worthy Salads"],
+    [196, "Mexican Food"],
+    [226, "Asian Bites & Soups"],
+    [248, "Bigger Things"],
+    [299, "Sweet Endings"],
+    [322, "Everything Else You Need"],
+  ];
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
@@ -31,7 +47,7 @@
   .sub { margin: 4px 0 20px; color: var(--muted); }
   .sub a { color: var(--accent); text-decoration: none; }
 
-  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 10px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
   .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
   .stat b { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
   .stat span { color: var(--muted); font-size: 0.85rem; }
@@ -61,7 +77,7 @@
   tr:last-child td { border-bottom: 0; }
   td.num { color: var(--muted); font-variant-numeric: tabular-nums; }
   td.dish { font-weight: 500; min-width: 180px; }
-  td.cat { color: var(--muted); white-space: nowrap; }
+  td.chapter { color: var(--muted); white-space: nowrap; }
   td.tick { color: var(--ok); font-weight: 700; text-align: center; }
   td.date, td.rating { white-space: nowrap; font-variant-numeric: tabular-nums; }
   .links a {
@@ -76,12 +92,19 @@
   }
   a.thumb-link { display: block; border-radius: 8px; }
   a.thumb-link:hover .thumb { opacity: 0.85; }
+  td.votes { white-space: nowrap; }
+  button.vote {
+    font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer;
+    color: var(--accent); background: var(--accent-soft); border: 0; border-radius: 99px; padding: 3px 10px;
+  }
+  button.vote:hover:not(:disabled) { filter: brightness(0.95); }
+  button.vote:disabled { cursor: default; opacity: 0.5; }
+  .no-votes .votes { display: none; }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .msg { padding: 28px; text-align: center; color: var(--muted); }
 
   @media (max-width: 640px) {
     h1 { font-size: 1.4rem; }
-    .stats { grid-template-columns: repeat(2, 1fr); }
     .count { margin-left: 0; width: 100%; }
     th, td { padding: 8px 7px; font-size: 0.88rem; }
     .hide-sm { display: none; }
@@ -95,7 +118,6 @@
   <p class="sub">The cookbook by <a href="https://www.instagram.com/recipetineater/" target="_blank" rel="noopener">@recipetineater</a>, one dish at a time.</p>
 
   <div class="stats">
-    <div class="stat"><b id="s-cooked">–</b><span>cooked</span></div>
     <div class="stat"><b id="s-posted">–</b><span>posted</span></div>
     <div class="stat"><b id="s-left">–</b><span>remaining</span></div>
     <div class="stat"><b id="s-pct">–</b><span>complete</span></div>
@@ -103,8 +125,8 @@
   <div class="bar"><i id="bar"></i></div>
 
   <div class="controls">
-    <input id="q" type="search" placeholder="Search dish, category or page…" aria-label="Search">
-    <select id="cat" aria-label="Category"><option value="">All categories</option></select>
+    <input id="q" type="search" placeholder="Search dish, chapter or page…" aria-label="Search">
+    <select id="chapter" aria-label="Chapter"><option value="">All chapters</option></select>
     <label><input id="posted" type="checkbox"> Posted only</label>
     <span class="count" id="count"></span>
   </div>
@@ -113,11 +135,11 @@
     <table>
       <thead>
         <tr>
-          <th><span class="sr-only">Photo</span></th><th>#</th><th class="hide-sm">Page</th><th class="hide-sm">Category</th><th>Dish</th>
-          <th>Posted</th><th>Date</th><th>Rating</th><th>Links</th>
+          <th><span class="sr-only">Photo</span></th><th>#</th><th class="hide-sm">Page</th><th class="hide-sm">Chapter</th><th>Dish</th>
+          <th>Posted</th><th>Date</th><th>Rating</th><th>Links</th><th class="votes">Vote</th>
         </tr>
       </thead>
-      <tbody id="rows"><tr><td colspan="9" class="msg">Loading…</td></tr></tbody>
+      <tbody id="rows"><tr><td colspan="10" class="msg">Loading…</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -129,6 +151,10 @@
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const done = (v) => String(v ?? "").trim() === TICK;
+  const chapterOf = (page) => (CHAPTERS.filter(([start]) => Number(page) >= start).pop() || CHAPTERS[0])[1];
+
+  let votes = {};          // dish # -> vote count
+  let votesLeft = null;    // votes this visitor has left, once known
 
   // Pull every URL out of a "Post link" cell, e.g. "IG https://… | Reddit reddit.com/…"
   function extractLinks(cell) {
@@ -153,28 +179,60 @@
 
   function render() {
     const q = $("q").value.trim().toLowerCase();
-    const cat = $("cat").value;
+    const chapter = $("chapter").value;
     const postedOnly = $("posted").checked;
 
     const shown = dishes.filter((d) =>
-      (!cat || d.category === cat) &&
+      (!chapter || d.chapter === chapter) &&
       (!postedOnly || d.posted) &&
-      (!q || d.dish.toLowerCase().includes(q) || d.category.toLowerCase().includes(q) || d.page.toLowerCase().includes(q))
+      (!q || d.dish.toLowerCase().includes(q) || d.chapter.toLowerCase().includes(q) || d.page.toLowerCase().includes(q))
     );
 
-    $("count").textContent = `${shown.length} of ${dishes.length} dishes`;
+    const left = votesLeft === null ? "" : ` · ${votesLeft} vote${votesLeft === 1 ? "" : "s"} left`;
+    $("count").textContent = `${shown.length} of ${dishes.length} dishes${left}`;
     $("rows").innerHTML = shown.length ? shown.map((d) => `
       <tr>
         <td class="photo">${thumb(d)}</td>
         <td class="num">${esc(d.n)}</td>
         <td class="num hide-sm">${esc(d.page)}</td>
-        <td class="cat hide-sm">${esc(d.category)}</td>
+        <td class="chapter hide-sm">${esc(d.chapter)}</td>
         <td class="dish">${esc(d.dish)}</td>
         <td class="tick">${d.posted ? TICK : ""}</td>
         <td class="date">${esc(d.date)}</td>
         <td class="rating">${esc(d.rating)}</td>
         <td class="links">${d.links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${l.label}</a>`).join("")}</td>
-      </tr>`).join("") : `<tr><td colspan="9" class="msg">No dishes match.</td></tr>`;
+        <td class="votes">${voteButton(d)}</td>
+      </tr>`).join("") : `<tr><td colspan="10" class="msg">No dishes match.</td></tr>`;
+  }
+
+  // Voting is only open on dishes that haven't been posted yet.
+  function voteButton(d) {
+    if (d.posted) return "";
+    const off = votesLeft === 0 ? " disabled" : "";
+    return `<button class="vote" data-n="${esc(d.n)}" title="Vote for this dish next"${off}>▲ ${votes[d.n] || 0}</button>`;
+  }
+
+  async function loadVotes() {
+    try {
+      const data = await (await fetch(VOTE_URL)).json();
+      votes = data.votes || {};
+      votesLeft = data.remaining ?? null;
+      render();
+    } catch {}
+  }
+
+  async function vote(n) {
+    try {
+      const r = await fetch(VOTE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dish: n }) });
+      const data = await r.json();
+      if (r.status === 429) { votesLeft = 0; render(); return; }
+      if (!r.ok) throw new Error(data.error);
+      votes[n] = data.votes;
+      votesLeft = data.remaining;
+      render();
+    } catch {
+      alert("Couldn't register your vote. Please try again.");
+    }
   }
 
   function summarise() {
@@ -182,7 +240,6 @@
     const cooked = dishes.filter((d) => d.cooked).length;
     const posted = dishes.filter((d) => d.posted).length;
     const pct = total ? (cooked / total) * 100 : 0;
-    $("s-cooked").textContent = cooked;
     $("s-posted").textContent = posted;
     $("s-left").textContent = total - cooked;
     $("s-pct").textContent = pct.toFixed(1) + "%";
@@ -202,7 +259,7 @@
           .map((r) => ({
             n: (r["#"] || "").trim(),
             page: (r["Page"] || "").trim(),
-            category: (r["Category"] || "").trim(),
+            chapter: chapterOf((r["Page"] || "").trim()),
             dish: (r["Dish"] || "").trim(),
             cooked: done(r["Cooked"]),
             posted: done(r["Posted"]),
@@ -212,20 +269,25 @@
             photo: (r["Photo URL"] || "").trim(),
           }));
 
-        const cats = [...new Set(dishes.map((d) => d.category).filter(Boolean))].sort();
-        $("cat").insertAdjacentHTML("beforeend", cats.map((c) => `<option>${esc(c)}</option>`).join(""));
+        const present = new Set(dishes.map((d) => d.chapter));
+        $("chapter").insertAdjacentHTML("beforeend", CHAPTERS.filter(([, c]) => present.has(c)).map(([, c]) => `<option>${esc(c)}</option>`).join(""));
 
         summarise();
         render();
       },
       error: () => {
-        $("rows").innerHTML = `<tr><td colspan="9" class="msg">Couldn't load the tracker. Try reloading.</td></tr>`;
+        $("rows").innerHTML = `<tr><td colspan="10" class="msg">Couldn't load the tracker. Try reloading.</td></tr>`;
       },
     });
   }
 
-  ["q", "cat", "posted"].forEach((id) => $(id).addEventListener("input", render));
+  ["q", "chapter", "posted"].forEach((id) => $(id).addEventListener("input", render));
+  $("rows").addEventListener("click", (e) => {
+    const btn = e.target.closest("button.vote");
+    if (btn) { btn.disabled = true; vote(btn.dataset.n); }
+  });
   load();
+  if (VOTE_URL) loadVotes(); else document.body.classList.add("no-votes");
 </script>
 </body>
 </html>
