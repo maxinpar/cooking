@@ -7,7 +7,12 @@
 <meta name="description" content="Cooking every dish in Dinner by @recipetineater: live progress tracker.">
 <script>
   // Live data: public Google Sheet, "Public" tab, as CSV.
-  const CSV_URL = "https://docs.google.com/spreadsheets/d/1f557VxAxSyOM9xvwQzXwrZx2TLdZa1gD2oo1UwQ-5FI/gviz/tq?tqx=out:csv&sheet=Public";
+  // Two URLs for the same tab; the second is only used if the first fails.
+  const SHEET = "https://docs.google.com/spreadsheets/d/1f557VxAxSyOM9xvwQzXwrZx2TLdZa1gD2oo1UwQ-5FI";
+  const CSV_URLS = [
+    SHEET + "/gviz/tq?tqx=out:csv&sheet=Public",
+    SHEET + "/export?format=csv&gid=1254242648",
+  ];
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
@@ -189,39 +194,47 @@
     $("bar").style.width = pct + "%";
   }
 
-  function load() {
-    // Cache-buster so a reload always asks Google for the latest sheet.
-    const url = CSV_URL + "&_=" + Date.now();
-    Papa.parse(url, {
-      download: true,
-      header: true,
-      skipEmptyLines: true,
-      complete: ({ data }) => {
-        dishes = data
-          .filter((r) => (r["Dish"] || "").trim())
-          .map((r) => ({
-            n: (r["#"] || "").trim(),
-            page: (r["Page"] || "").trim(),
-            category: (r["Category"] || "").trim(),
-            dish: (r["Dish"] || "").trim(),
-            cooked: done(r["Cooked"]),
-            posted: done(r["Posted"]),
-            date: (r["Date posted"] || "").trim(),
-            rating: (r["Rating"] || "").trim(),
-            links: extractLinks(r["Post link"]),
-            photo: (r["Photo URL"] || "").trim(),
-          }));
+  // Try each CSV URL in turn; a cache-buster makes every reload ask Google for the latest sheet.
+  async function fetchRows() {
+    let lastError;
+    for (const base of CSV_URLS) {
+      try {
+        const res = await fetch(base + "&_=" + Date.now(), { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const { data } = Papa.parse(await res.text(), { header: true, skipEmptyLines: true });
+        const rows = data.filter((r) => (r["Dish"] || "").trim());
+        if (!rows.length) throw new Error("no dishes in response");
+        return rows;
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    throw lastError;
+  }
 
-        const cats = [...new Set(dishes.map((d) => d.category).filter(Boolean))].sort();
-        $("cat").insertAdjacentHTML("beforeend", cats.map((c) => `<option>${esc(c)}</option>`).join(""));
+  async function load() {
+    try {
+      dishes = (await fetchRows()).map((r) => ({
+        n: (r["#"] || "").trim(),
+        page: (r["Page"] || "").trim(),
+        category: (r["Category"] || "").trim(),
+        dish: (r["Dish"] || "").trim(),
+        cooked: done(r["Cooked"]),
+        posted: done(r["Posted"]),
+        date: (r["Date posted"] || "").trim(),
+        rating: (r["Rating"] || "").trim(),
+        links: extractLinks(r["Post link"]),
+        photo: (r["Photo URL"] || "").trim(),
+      }));
 
-        summarise();
-        render();
-      },
-      error: () => {
-        $("rows").innerHTML = `<tr><td colspan="9" class="msg">Couldn't load the tracker. Try reloading.</td></tr>`;
-      },
-    });
+      const cats = [...new Set(dishes.map((d) => d.category).filter(Boolean))].sort();
+      $("cat").insertAdjacentHTML("beforeend", cats.map((c) => `<option>${esc(c)}</option>`).join(""));
+
+      summarise();
+      render();
+    } catch (e) {
+      $("rows").innerHTML = `<tr><td colspan="9" class="msg">Couldn't load the tracker (${esc(e.message)}). Try reloading.</td></tr>`;
+    }
   }
 
   ["q", "cat", "posted"].forEach((id) => $(id).addEventListener("input", render));
