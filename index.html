@@ -99,7 +99,11 @@
   }
   button.vote:hover:not(:disabled) { filter: brightness(0.95); }
   button.vote:disabled { cursor: default; opacity: 0.5; }
-  .no-votes .votes { display: none; }
+  tr.sep td { background: var(--bg); font-weight: 600; padding: 10px; }
+  .tag {
+    display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 99px;
+    background: var(--accent-soft); color: var(--accent); font-size: 0.78rem; font-weight: 600; white-space: nowrap;
+  }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
   .msg { padding: 28px; text-align: center; color: var(--muted); }
 
@@ -190,7 +194,7 @@
 
     const left = votesLeft === null ? "" : ` · ${votesLeft} vote${votesLeft === 1 ? "" : "s"} left`;
     $("count").textContent = `${shown.length} of ${dishes.length} dishes${left}`;
-    $("rows").innerHTML = shown.length ? shown.map((d) => `
+    const row = (d) => `
       <tr>
         <td class="photo">${thumb(d)}</td>
         <td class="num">${esc(d.n)}</td>
@@ -202,14 +206,29 @@
         <td class="rating">${esc(d.rating)}</td>
         <td class="links">${d.links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${l.label}</a>`).join("")}</td>
         <td class="votes">${voteButton(d)}</td>
-      </tr>`).join("") : `<tr><td colspan="10" class="msg">No dishes match.</td></tr>`;
+      </tr>`;
+
+    // One separator row per chapter, tagged with that chapter's posted count.
+    const separator = (c) => {
+      const all = dishes.filter((d) => d.chapter === c);
+      const posted = all.filter((d) => d.posted).length;
+      return `<tr class="sep"><td colspan="10">${esc(c)}<span class="tag">${posted} / ${all.length} posted</span></td></tr>`;
+    };
+
+    $("rows").innerHTML = shown.length
+      ? CHAPTERS.map(([, c]) => {
+          const rows = shown.filter((d) => d.chapter === c);
+          return rows.length ? separator(c) + rows.map(row).join("") : "";
+        }).join("")
+      : `<tr><td colspan="10" class="msg">No dishes match.</td></tr>`;
   }
 
   // Voting is only open on dishes that haven't been posted yet.
   function voteButton(d) {
     if (d.posted) return "";
-    const off = votesLeft === 0 ? " disabled" : "";
-    return `<button class="vote" data-n="${esc(d.n)}" title="Vote for this dish next"${off}>▲ ${votes[d.n] || 0}</button>`;
+    const off = !VOTE_URL || votesLeft === 0 ? " disabled" : "";
+    const title = !VOTE_URL ? "Voting opens soon" : votesLeft === 0 ? "You have used all your votes" : "Vote for this dish next";
+    return `<button class="vote" data-n="${esc(d.n)}" title="${title}"${off}>▲ ${votes[d.n] || 0}</button>`;
   }
 
   async function loadVotes() {
@@ -287,7 +306,7 @@
     if (btn) { btn.disabled = true; vote(btn.dataset.n); }
   });
   load();
-  if (VOTE_URL) loadVotes(); else document.body.classList.add("no-votes");
+  if (VOTE_URL) loadVotes();
 </script>
 </body>
 </html>
