@@ -77,7 +77,6 @@
   tr:last-child td { border-bottom: 0; }
   td.num { color: var(--muted); font-variant-numeric: tabular-nums; }
   td.dish { font-weight: 500; min-width: 180px; }
-  td.chapter { color: var(--muted); white-space: nowrap; }
   td.tick { color: var(--ok); font-weight: 700; text-align: center; }
   td.date, td.rating { white-space: nowrap; font-variant-numeric: tabular-nums; }
   .links a {
@@ -139,11 +138,11 @@
     <table>
       <thead>
         <tr>
-          <th><span class="sr-only">Photo</span></th><th>#</th><th class="hide-sm">Page</th><th class="hide-sm">Chapter</th><th>Dish</th>
+          <th><span class="sr-only">Photo</span></th><th>#</th><th class="hide-sm">Page</th><th>Dish</th>
           <th>Posted</th><th>Date</th><th>Rating</th><th>Links</th><th class="votes">Vote</th>
         </tr>
       </thead>
-      <tbody id="rows"><tr><td colspan="10" class="msg">Loading…</td></tr></tbody>
+      <tbody id="rows"><tr><td colspan="9" class="msg">Loading…</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -199,7 +198,6 @@
         <td class="photo">${thumb(d)}</td>
         <td class="num">${esc(d.n)}</td>
         <td class="num hide-sm">${esc(d.page)}</td>
-        <td class="chapter hide-sm">${esc(d.chapter)}</td>
         <td class="dish">${esc(d.dish)}</td>
         <td class="tick">${d.posted ? TICK : ""}</td>
         <td class="date">${esc(d.date)}</td>
@@ -212,7 +210,7 @@
     const separator = (c) => {
       const all = dishes.filter((d) => d.chapter === c);
       const posted = all.filter((d) => d.posted).length;
-      return `<tr class="sep"><td colspan="10">${esc(c)}<span class="tag">${posted} / ${all.length} posted</span></td></tr>`;
+      return `<tr class="sep"><td colspan="9">${esc(c)}<span class="tag">${posted} / ${all.length} posted</span></td></tr>`;
     };
 
     $("rows").innerHTML = shown.length
@@ -220,7 +218,7 @@
           const rows = shown.filter((d) => d.chapter === c);
           return rows.length ? separator(c) + rows.map(row).join("") : "";
         }).join("")
-      : `<tr><td colspan="10" class="msg">No dishes match.</td></tr>`;
+      : `<tr><td colspan="9" class="msg">No dishes match.</td></tr>`;
   }
 
   // Voting is only open on dishes that haven't been posted yet.
@@ -295,7 +293,7 @@
         render();
       },
       error: () => {
-        $("rows").innerHTML = `<tr><td colspan="10" class="msg">Couldn't load the tracker. Try reloading.</td></tr>`;
+        $("rows").innerHTML = `<tr><td colspan="9" class="msg">Couldn't load the tracker. Try reloading.</td></tr>`;
       },
     });
   }
