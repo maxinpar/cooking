@@ -14,6 +14,8 @@
   // Votes: URL of the deployed Cloudflare Worker in worker/.
   const VOTE_URL = "https://cooking-votes.maxboucoiran.workers.dev/";
   const TOTAL_VOTES = 20;
+  // Dishes that can't be voted for (button shown greyed out).
+  const NO_VOTE = ["Beef Wellington"];
   // Chapters of the book, with the page each one starts on.
   const CHAPTERS = [
     [1, "Everyday Food"],
@@ -239,6 +241,8 @@
 
   const count = (n) => votes[n] || 0;
   const noVotes = () => votesLeft === 0;
+  const blocked = (d) => NO_VOTE.some((n) => n.toLowerCase() === d.dish.toLowerCase());
+  const btnAttrs = (d) => `data-n="${esc(d.n)}" ${blocked(d) ? `aria-label="${esc(d.dish)} is not open for votes" title="Not open for votes" disabled` : aria(d) + (noVotes() ? " disabled" : "")}`;
   const mineLabel = (n) => (myVotes[n] ? `<span class="mine">you +${myVotes[n]}</span>` : "");
   const aria = (d) => `aria-label="Vote for ${esc(d.dish)}, ${count(d.n)} votes"`;
   const pageLabel = (d) => `<span class="mono">p.${esc(d.page)}</span>`;
@@ -268,15 +272,14 @@
 
   function renderVote() {
     if (!dishes.length) { placeholders("top3", 3); placeholders("open", 8); return; }
-    const off = noVotes() ? " disabled" : "";
-    $("top3").innerHTML = voteOrder.slice(0, 3).map((d, i) => `
+    $("top3").innerHTML = voteOrder.filter((d) => !blocked(d)).slice(0, 3).map((d, i) => `
       <div class="card">
         <span class="rank">${i + 1}</span>
         <div class="body">
           <span class="name">${esc(d.dish)}</span>
           <span class="meta">${esc(d.chapter)} · p.${esc(d.page)}</span>
         </div>
-        <button class="btn-big" data-n="${esc(d.n)}" ${aria(d)}${off}><b>+</b><span>${count(d.n)}</span></button>
+        <button class="btn-big" ${btnAttrs(d)}><b>+</b><span>${count(d.n)}</span></button>
       </div>`).join("");
     $("open").innerHTML = voteOrder.map((d) => `
       <div class="row">
@@ -284,7 +287,7 @@
           <span class="name">${esc(d.dish)}</span>
           <span class="meta">${esc(d.chapter)} · ${pageLabel(d)} ${mineLabel(d.n)}</span>
         </div>
-        <button class="btn-vote" data-n="${esc(d.n)}" ${aria(d)}${off}>+ ${count(d.n)}</button>
+        <button class="btn-vote" ${btnAttrs(d)}>+ ${count(d.n)}</button>
       </div>`).join("");
   }
 
@@ -334,7 +337,6 @@
       (!needle || d.dish.toLowerCase().includes(needle) || d.page === needle) &&
       (chapter === "all" || d.chapter === chapter) &&
       (!postedOnly || d.posted));
-    const off = noVotes() ? " disabled" : "";
     const groups = CHAPTERS.map(([, c]) => {
       const rows = shown.filter((d) => d.chapter === c);
       if (!rows.length) return "";
@@ -351,7 +353,7 @@
             <span class="name">${esc(d.dish)}</span>
             ${d.posted ? `<span class="posted"><span class="ok">✓ Posted ${esc(dateLabel(d))}</span>${d.rating ? `<span class="star">★ ${esc(d.rating)}</span>` : ""}${d.reddit ? `<a href="${esc(d.reddit)}">Reddit ↗</a>` : ""}</span>` : ""}
           </div>
-          ${d.posted ? "" : `<button class="btn-sm" data-n="${esc(d.n)}" ${aria(d)}${off}>+ ${count(d.n)}</button>`}
+          ${d.posted ? "" : `<button class="btn-sm" ${btnAttrs(d)}>+ ${count(d.n)}</button>`}
         </div>`).join("")}
       </div>`;
     }).join("");
@@ -392,7 +394,8 @@
   }
 
   async function vote(n) {
-    if (noVotes()) return;
+    const d = dishes.find((x) => x.n === n);
+    if (noVotes() || !d || blocked(d)) return;
     // Optimistic update, rolled back if the request fails.
     votes[n] = count(n) + 1;
     if (votesLeft !== null) votesLeft--;
