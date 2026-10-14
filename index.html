@@ -219,6 +219,7 @@
   let dishes = [];
   let loadError = false;
   let votes = {};          // dish # -> vote count
+  let voters = {};         // dish # -> number of different people who voted for it
   let votesLeft = null;    // votes this visitor has left, once known
   let myVotes = {};        // dish # -> votes this visitor gave it (kept in localStorage)
   let voteOrder = [];      // uncooked dishes sorted by votes; refreshed only when the Vote tab opens
@@ -245,6 +246,7 @@
   const blocked = (d) => NO_VOTE.some((n) => n.toLowerCase() === d.dish.toLowerCase());
   const btnAttrs = (d) => `data-n="${esc(d.n)}" ${blocked(d) ? `aria-label="${esc(d.dish)} is not open for votes" title="Not open for votes" disabled` : aria(d) + (noVotes() ? " disabled" : "")}`;
   const mineLabel = (n) => (myVotes[n] ? `<span class="mine">you +${myVotes[n]}</span>` : "");
+  const votersLabel = (n) => (voters[n] ? ` · ${voters[n]} voter${voters[n] === 1 ? "" : "s"}` : "");
   const aria = (d) => `aria-label="Vote for ${esc(d.dish)}, ${count(d.n)} votes"`;
   const pageLabel = (d) => `<span class="mono">p.${esc(d.page)}</span>`;
 
@@ -278,7 +280,7 @@
         <span class="rank">${i + 1}</span>
         <div class="body">
           <span class="name">${esc(d.dish)}</span>
-          <span class="meta">${esc(d.chapter)} · p.${esc(d.page)}</span>
+          <span class="meta">${esc(d.chapter)} · p.${esc(d.page)}${votersLabel(d.n)}</span>
         </div>
         <button class="btn-big" ${btnAttrs(d)}><b>+</b><span>${count(d.n)}</span></button>
       </div>`).join("");
@@ -286,7 +288,7 @@
       <div class="row">
         <div class="body">
           <span class="name">${esc(d.dish)}</span>
-          <span class="meta">${esc(d.chapter)} · ${pageLabel(d)} ${mineLabel(d.n)}</span>
+          <span class="meta">${esc(d.chapter)} · ${pageLabel(d)}${votersLabel(d.n)} ${mineLabel(d.n)}</span>
         </div>
         <button class="btn-vote" ${btnAttrs(d)}>+ ${count(d.n)}</button>
       </div>`).join("");
@@ -400,22 +402,28 @@
     // Optimistic update, rolled back if the request fails.
     votes[n] = count(n) + 1;
     if (votesLeft !== null) votesLeft--;
+    if (!myVotes[n]) voters[n] = (voters[n] || 0) + 1;
     myVotes[n] = (myVotes[n] || 0) + 1;
     render();
     try {
       const r = await fetch(VOTE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dish: n }) });
       const data = await r.json();
-      if (r.status === 429) { votes[n]--; myVotes[n]--; votesLeft = 0; render(); return; }
+      if (r.status === 429) { undo(); votesLeft = 0; render(); return; }
       if (!r.ok) throw new Error(data.error);
       votes[n] = data.votes;
+      if (data.voters != null) voters[n] = data.voters;
       votesLeft = data.remaining;
       localStorage.setItem("myVotes", JSON.stringify(myVotes));
       render();
     } catch {
-      votes[n]--; myVotes[n]--;
+      undo();
       if (votesLeft !== null) votesLeft++;
       render();
       flash("Vote didn't go through, try again");
+    }
+    function undo() {
+      votes[n]--; myVotes[n]--;
+      if (!myVotes[n]) voters[n]--;
     }
   }
 
@@ -423,6 +431,8 @@
     try {
       const data = await (await fetch(VOTE_URL)).json();
       votes = data.votes || {};
+      voters = data.voters || {};
+      if (data.mine && Object.keys(data.mine).length) { myVotes = data.mine; localStorage.setItem("myVotes", JSON.stringify(myVotes)); }
       votesLeft = data.remaining ?? null;
       if (tab === "vote") sortOpen();
       render();

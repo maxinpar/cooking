@@ -1,6 +1,6 @@
 // Cloudflare Worker that stores votes in a D1 database (binding: DB).
-// GET  -> { votes: { "<dish #>": count }, remaining: <votes this IP has left> }
-// POST { dish } -> { votes: <new count>, remaining } or 429 once the IP has used all its votes.
+// GET  -> { votes: { "<dish #>": count }, voters: { "<dish #>": distinct voters }, mine: { "<dish #>": my votes }, remaining }
+// POST { dish } -> { votes: <new count>, voters, remaining } or 429 once the IP has used all its votes.
 
 const LIMIT = 20;
 const CORS = {
@@ -17,6 +17,7 @@ function init(db) {
   ready ??= db.batch([
     db.prepare("CREATE TABLE IF NOT EXISTS votes (dish TEXT PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0)"),
     db.prepare("CREATE TABLE IF NOT EXISTS voters (ip TEXT PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS ballots (ip TEXT, dish TEXT, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (ip, dish))"),
   ]);
   return ready;
 }
@@ -35,12 +36,14 @@ export default {
     const ip = await voterId(request);
 
     if (request.method === "GET") {
-      const [{ results }, voter] = await Promise.all([
+      const [{ results }, voter, counts, mine] = await Promise.all([
         env.DB.prepare("SELECT dish, n FROM votes").all(),
         env.DB.prepare("SELECT n FROM voters WHERE ip = ?").bind(ip).first(),
+        env.DB.prepare("SELECT dish, COUNT(*) AS n FROM ballots GROUP BY dish").all(),
+        env.DB.prepare("SELECT dish, n FROM ballots WHERE ip = ?").bind(ip).all(),
       ]);
-      const votes = Object.fromEntries(results.map((r) => [r.dish, r.n]));
-      return json({ votes, remaining: LIMIT - (voter?.n || 0) });
+      const toMap = (rows) => Object.fromEntries(rows.map((r) => [r.dish, r.n]));
+      return json({ votes: toMap(results), voters: toMap(counts.results), mine: toMap(mine.results), remaining: LIMIT - (voter?.n || 0) });
     }
 
     if (request.method === "POST") {
@@ -54,11 +57,12 @@ export default {
         .first();
       if (!voter) return json({ error: `You have used all ${LIMIT} votes`, remaining: 0 }, 429);
 
-      const row = await env.DB
-        .prepare("INSERT INTO votes (dish, n) VALUES (?, 1) ON CONFLICT(dish) DO UPDATE SET n = n + 1 RETURNING n")
-        .bind(String(dish))
-        .first();
-      return json({ votes: row.n, remaining: LIMIT - voter.n });
+      const [row, , voters] = await env.DB.batch([
+        env.DB.prepare("INSERT INTO votes (dish, n) VALUES (?, 1) ON CONFLICT(dish) DO UPDATE SET n = n + 1 RETURNING n").bind(String(dish)),
+        env.DB.prepare("INSERT INTO ballots (ip, dish, n) VALUES (?, ?, 1) ON CONFLICT(ip, dish) DO UPDATE SET n = n + 1").bind(ip, String(dish)),
+        env.DB.prepare("SELECT COUNT(*) AS n FROM ballots WHERE dish = ?").bind(String(dish)),
+      ]);
+      return json({ votes: row.results[0].n, voters: voters.results[0].n, remaining: LIMIT - voter.n });
     }
 
     return json({ error: "Method not allowed" }, 405);
