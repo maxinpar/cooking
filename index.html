@@ -177,7 +177,7 @@
     </div>
     <div class="top3" id="top3"></div>
     <div>
-      <div class="rule"><h3>Every uncooked dish</h3><span>Most votes first</span></div>
+      <div class="rule"><h3>Every uncooked dish</h3><span id="open-note">Most votes first</span></div>
       <div class="open" id="open"></div>
     </div>
   </section>
@@ -284,6 +284,8 @@
         </div>
         <button class="btn-big" ${btnAttrs(d)}><b>+</b><span>${count(d.n)}</span></button>
       </div>`).join("");
+    const total = Object.values(votes).reduce((a, b) => a + b, 0);
+    $("open-note").textContent = total ? `${total} vote${total === 1 ? "" : "s"} cast · Most votes first` : "Most votes first";
     $("open").innerHTML = voteOrder.map((d) => `
       <div class="row">
         <div class="body">
