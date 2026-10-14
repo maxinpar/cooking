@@ -287,18 +287,32 @@
       </div>`).join("");
   }
 
+  // Dishes that share one Reddit post (or photo) are shown as a single tile listing all their names.
+  function cookedGroups() {
+    const groups = new Map();
+    for (const d of dishes.filter((d) => d.posted)) {
+      const key = (d.reddit || d.photo || "#" + d.n).replace(/\/+$/, "");
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(d);
+    }
+    return [...groups.values()].sort((a, b) => (b[0].dateObj || 0) - (a[0].dateObj || 0));
+  }
+
   function renderCooked() {
     if (!dishes.length) { placeholders("photos", 6, "tile"); return; }
-    const cooked = dishes.filter((d) => d.posted).sort((a, b) => (b.dateObj || 0) - (a.dateObj || 0));
-    $("photos").innerHTML = cooked.map((d) => {
-      const tag = d.reddit ? `a href="${esc(d.reddit)}"` : "div";
+    $("photos").innerHTML = cookedGroups().map((g) => {
+      const d = g[0];
+      const photo = g.find((x) => x.photo)?.photo;
+      const ratings = [...new Set(g.map((x) => x.rating).filter(Boolean))];
+      const names = g.map((x) => esc(x.dish)).join(" + ");
+      const pages = g.map((x) => "p." + esc(x.page)).join(", ");
       return `
-      <${tag} class="tile">
-        ${d.photo ? `<img src="${esc(d.photo)}" alt="${esc(d.dish)}" loading="lazy">` : ""}
-        ${d.rating ? `<span class="badge">★ ${esc(d.rating)}</span>` : "<span></span>"}
+      <${d.reddit ? `a href="${esc(d.reddit)}"` : "div"} class="tile">
+        ${photo ? `<img src="${esc(photo)}" alt="${names}" loading="lazy">` : ""}
+        ${ratings.length ? `<span class="badge">★ ${esc(ratings.join(" / "))}</span>` : "<span></span>"}
         <div class="caption">
-          <span class="name">${esc(d.dish)}</span>
-          <span class="meta">${esc(dateLabel(d))} · p.${esc(d.page)}</span>
+          <span class="name">${names}</span>
+          <span class="meta">${esc(dateLabel(d))} · ${pages}</span>
         </div>
       </${d.reddit ? "a" : "div"}>`;
     }).join("");
