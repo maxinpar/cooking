@@ -46,6 +46,9 @@
   h1 { margin: 0; font-size: 1.7rem; line-height: 1.2; letter-spacing: -0.01em; }
   .sub { margin: 4px 0 20px; color: var(--muted); }
   .sub a { color: var(--accent); text-decoration: none; }
+  header.top { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+  header.top .sub { margin-bottom: 0; }
+  .cover { height: 110px; width: auto; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
 
   .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
   .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
@@ -108,6 +111,7 @@
 
   @media (max-width: 640px) {
     h1 { font-size: 1.4rem; }
+    .cover { height: 80px; }
     .count { margin-left: 0; width: 100%; }
     th, td { padding: 8px 7px; font-size: 0.88rem; }
     .hide-sm { display: none; }
@@ -117,8 +121,13 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>Cooking every dish in Dinner</h1>
-  <p class="sub">The cookbook by <a href="https://www.reddit.com/user/Maxinbxl/" target="_blank" rel="noopener">u/Maxinbxl</a>, one dish at a time.</p>
+  <header class="top">
+    <img class="cover" src="dinner.jpg" alt="Dinner by Nagi Maehashi, book cover">
+    <div>
+    <h1>Cooking every dish in Dinner</h1>
+    <p class="sub">The cookbook by <a href="https://www.reddit.com/user/Maxinbxl/" target="_blank" rel="noopener">u/Maxinbxl</a>, one dish at a time.</p>
+    </div>
+  </header>
 
   <div class="stats">
     <div class="stat"><b id="s-posted">–</b><span>posted</span></div>
