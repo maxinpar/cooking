@@ -51,6 +51,7 @@
 
   /* Header */
   .head { display: flex; gap: 12px; align-items: center; }
+  .cover-link { flex: none; display: block; line-height: 0; }
   .cover { width: 48px; height: 64px; object-fit: cover; border-radius: 3px; box-shadow: 0 4px 10px rgba(60,35,15,.2); flex: none; background: #e7d6c0; }
   .head h1 { font-size: 22px; line-height: 1.1; text-wrap: balance; }
   .head p { margin: 3px 0 0; font-size: 13px; line-height: 1.35; color: var(--muted); }
@@ -149,7 +150,7 @@
 <body>
 <div class="page">
   <header class="head">
-    <img class="cover" src="dinner.jpg" alt="Dinner by Nagi Maehashi, book cover">
+    <a class="cover-link" href="https://www.recipetineats.com/" title="RecipeTin Eats"><img class="cover" src="dinner.jpg" alt="Dinner by Nagi Maehashi, book cover"></a>
     <div>
       <h1>Cooking every dish in Dinner</h1>
       <p>Nagi’s cookbook, cooked by <a href="https://www.reddit.com/user/Maxinbxl/">u/Maxinbxl</a>, one dish at a time, posted to <a href="https://www.reddit.com/r/RecipeTinEats/">r/recipetineats</a>.</p>
