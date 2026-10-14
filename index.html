@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cooking every dish in Dinner</title>
-<meta name="description" content="Cooking every dish in Dinner by @recipetineater: live progress tracker.">
+<meta name="description" content="Cooking every dish in Dinner by u/Maxinbxl: live progress tracker.">
 <script>
   // Live data: public Google Sheet, "Public" tab, as CSV.
   const CSV_URL = "https://docs.google.com/spreadsheets/d/1f557VxAxSyOM9xvwQzXwrZx2TLdZa1gD2oo1UwQ-5FI/gviz/tq?tqx=out:csv&sheet=Public";
@@ -118,7 +118,7 @@
 <body>
 <div class="wrap">
   <h1>Cooking every dish in Dinner</h1>
-  <p class="sub">The cookbook by <a href="https://www.instagram.com/recipetineater/" target="_blank" rel="noopener">@recipetineater</a>, one dish at a time.</p>
+  <p class="sub">The cookbook by <a href="https://www.reddit.com/user/Maxinbxl/" target="_blank" rel="noopener">u/Maxinbxl</a>, one dish at a time.</p>
 
   <div class="stats">
     <div class="stat"><b id="s-posted">–</b><span>posted</span></div>
@@ -159,25 +159,24 @@
   let votes = {};          // dish # -> vote count
   let votesLeft = null;    // votes this visitor has left, once known
 
-  // Pull every URL out of a "Post link" cell, e.g. "IG https://… | Reddit reddit.com/…"
+  // Pull the Reddit URLs out of a "Post link" cell.
   function extractLinks(cell) {
     const found = String(cell ?? "").match(/(?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,}\/[^\s|]*/gi) || [];
     return found.map((raw) => {
       const url = /^https?:\/\//i.test(raw) ? raw : "https://" + raw;
       const host = url.replace(/^https?:\/\/(www\.)?/i, "").toLowerCase();
       let label = "Link";
-      if (host.startsWith("instagram.com")) label = host.includes("/reel/") ? "Reel" : "IG";
-      else if (host.startsWith("reddit.com")) label = "Reddit";
+      if (host.startsWith("reddit.com")) label = "Reddit";
       return { url, label };
-    });
+    }).filter((l) => l.label === "Reddit");
   }
 
-  // Square thumbnail (or same-size placeholder); clicks through to the first IG link.
+  // Square thumbnail (or same-size placeholder); clicks through to the Reddit post.
   function thumb(d) {
     if (!d.photo) return `<span class="thumb"></span>`;
     const img = `<img class="thumb" src="${esc(d.photo)}" alt="${esc(d.dish)}" loading="lazy">`;
-    const ig = d.links.find((l) => l.url.includes("instagram.com"));
-    return ig ? `<a class="thumb-link" href="${esc(ig.url)}" target="_blank" rel="noopener">${img}</a>` : img;
+    const post = d.links[0];
+    return post ? `<a class="thumb-link" href="${esc(post.url)}" target="_blank" rel="noopener">${img}</a>` : img;
   }
 
   function render() {
