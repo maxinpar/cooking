@@ -86,7 +86,7 @@
   .links a:hover { text-decoration: underline; }
   td.photo { width: 1%; padding-right: 4px; }
   .thumb {
-    display: block; width: 64px; height: 64px; border-radius: 8px;
+    display: block; width: 80px; height: 80px; border-radius: 8px;
     background: var(--line); object-fit: cover;
   }
   a.thumb-link { display: block; border-radius: 8px; }
@@ -111,7 +111,7 @@
     .count { margin-left: 0; width: 100%; }
     th, td { padding: 8px 7px; font-size: 0.88rem; }
     .hide-sm { display: none; }
-    .thumb { width: 48px; height: 48px; }
+    .thumb { width: 56px; height: 56px; }
   }
 </style>
 </head>
@@ -138,11 +138,11 @@
     <table>
       <thead>
         <tr>
-          <th><span class="sr-only">Photo</span></th><th>#</th><th class="hide-sm">Page</th><th>Dish</th>
+          <th><span class="sr-only">Photo</span></th><th class="hide-sm">Page</th><th>Dish</th>
           <th>Posted</th><th>Date</th><th>Rating</th><th>Links</th><th class="votes">Vote</th>
         </tr>
       </thead>
-      <tbody id="rows"><tr><td colspan="9" class="msg">Loading…</td></tr></tbody>
+      <tbody id="rows"><tr><td colspan="8" class="msg">Loading…</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -195,7 +195,6 @@
     const row = (d) => `
       <tr>
         <td class="photo">${thumb(d)}</td>
-        <td class="num">${esc(d.n)}</td>
         <td class="num hide-sm">${esc(d.page)}</td>
         <td class="dish">${esc(d.dish)}</td>
         <td class="tick">${d.posted ? TICK : ""}</td>
@@ -209,7 +208,7 @@
     const separator = (c) => {
       const all = dishes.filter((d) => d.chapter === c);
       const posted = all.filter((d) => d.posted).length;
-      return `<tr class="sep"><td colspan="9">${esc(c)}<span class="tag">${posted} / ${all.length} posted</span></td></tr>`;
+      return `<tr class="sep"><td colspan="8">${esc(c)}<span class="tag">${posted} / ${all.length} posted</span></td></tr>`;
     };
 
     $("rows").innerHTML = shown.length
@@ -217,7 +216,7 @@
           const rows = shown.filter((d) => d.chapter === c);
           return rows.length ? separator(c) + rows.map(row).join("") : "";
         }).join("")
-      : `<tr><td colspan="9" class="msg">No dishes match.</td></tr>`;
+      : `<tr><td colspan="8" class="msg">No dishes match.</td></tr>`;
   }
 
   // Voting is only open on dishes that haven't been posted yet.
@@ -291,7 +290,7 @@
         render();
       },
       error: () => {
-        $("rows").innerHTML = `<tr><td colspan="9" class="msg">Couldn't load the tracker. Try reloading.</td></tr>`;
+        $("rows").innerHTML = `<tr><td colspan="8" class="msg">Couldn't load the tracker. Try reloading.</td></tr>`;
       },
     });
   }
