@@ -253,11 +253,10 @@
 
   function summarise() {
     const total = dishes.length;
-    const cooked = dishes.filter((d) => d.cooked).length;
     const posted = dishes.filter((d) => d.posted).length;
-    const pct = total ? (cooked / total) * 100 : 0;
+    const pct = total ? (posted / total) * 100 : 0;
     $("s-posted").textContent = posted;
-    $("s-left").textContent = total - cooked;
+    $("s-left").textContent = total - posted;
     $("s-pct").textContent = pct.toFixed(1) + "%";
     $("bar").style.width = pct + "%";
   }
