@@ -4,12 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cooking every dish in Dinner</title>
-<meta name="description" content="Cooking every dish in Dinner by u/Maxinbxl: live progress tracker.">
+<meta name="description" content="Cooking every dish in Dinner by u/Maxinbxl: vote for the next dish and follow the progress.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..600&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <script>
   // Live data: public Google Sheet, "Public" tab, as CSV.
   const CSV_URL = "https://docs.google.com/spreadsheets/d/1f557VxAxSyOM9xvwQzXwrZx2TLdZa1gD2oo1UwQ-5FI/gviz/tq?tqx=out:csv&sheet=Public";
-  // Votes: URL of the deployed Cloudflare Worker in worker/ (leave empty to hide voting).
+  // Votes: URL of the deployed Cloudflare Worker in worker/.
   const VOTE_URL = "https://cooking-votes.maxboucoiran.workers.dev/";
+  const TOTAL_VOTES = 20;
   // Chapters of the book, with the page each one starts on.
   const CHAPTERS = [
     [1, "Everyday Food"],
@@ -28,212 +32,372 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
   :root {
-    --bg: #faf7f2; --card: #ffffff; --text: #2a2522; --muted: #7a706a;
-    --line: #ece5dc; --accent: #c2502a; --accent-soft: #fbe9e2; --ok: #2f7d4f;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #1a1715; --card: #24201d; --text: #f0ebe6; --muted: #a69c94;
-      --line: #3a342f; --accent: #ec7a52; --accent-soft: #3a2620; --ok: #6cc28f;
-    }
+    --bg: #f5eee1; --paper: #fbf7ef; --ink: #2b211a; --muted: #6f6155;
+    --line: #e4d8c4; --border: #dccdb6; --track: #e6d9c5; --seg: #eadfcd;
+    --accent: #c2502a; --accent-hover: #a2462a; --accent-soft: #f3e3d6; --pip: #e08a68; --green: #4f7a4a;
+    --sans: "Hanken Grotesk", system-ui, sans-serif; --serif: "Newsreader", Georgia, serif; --mono: "JetBrains Mono", ui-monospace, monospace;
   }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  }
-  .wrap { max-width: 1000px; margin: 0 auto; padding: 28px 16px 48px; }
-  h1 { margin: 0; font-size: 1.7rem; line-height: 1.2; letter-spacing: -0.01em; }
-  .sub { margin: 4px 0 20px; color: var(--muted); }
-  .sub a { color: var(--accent); text-decoration: none; }
-  header.top { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
-  header.top .sub { margin-bottom: 0; }
-  .cover { height: 110px; width: auto; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.18); }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); }
+  body { font: 15px/1.4 var(--sans); }
+  a { color: var(--accent); }
+  a:hover { color: var(--accent-hover); }
+  button { font-family: var(--sans); cursor: pointer; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  h1, h2, h3 { margin: 0; font-family: var(--serif); font-weight: 600; }
+  .page { max-width: 1080px; margin: 0 auto; padding: 16px 16px 0; }
 
-  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 10px; }
-  .stat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
-  .stat b { display: block; font-size: 1.5rem; font-variant-numeric: tabular-nums; }
-  .stat span { color: var(--muted); font-size: 0.85rem; }
-  .bar { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; margin-bottom: 20px; }
-  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .6s ease; }
+  /* Header */
+  .head { display: flex; gap: 12px; align-items: center; }
+  .cover { width: 48px; height: 64px; object-fit: cover; border-radius: 3px; box-shadow: 0 4px 10px rgba(60,35,15,.2); flex: none; background: #e7d6c0; }
+  .head h1 { font-size: 22px; line-height: 1.1; text-wrap: balance; }
+  .head p { margin: 3px 0 0; font-size: 13px; line-height: 1.35; color: var(--muted); }
+  .head p a { font-weight: 600; text-decoration: none; }
 
-  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
-  .controls input[type=search], .controls select {
-    font: inherit; color: var(--text); background: var(--card);
-    border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px;
-  }
-  .controls input[type=search] { flex: 1 1 240px; min-width: 0; }
-  .controls label { display: flex; gap: 6px; align-items: center; color: var(--muted); cursor: pointer; white-space: nowrap; }
-  .count { color: var(--muted); font-size: 0.85rem; margin-left: auto; }
+  /* Progress */
+  .progress { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+  .track { flex: 1; height: 8px; border-radius: 99px; background: var(--track); overflow: hidden; }
+  .track i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .6s ease; }
+  .ptext { font-size: 13px; color: var(--muted); flex: none; }
+  .ptext b { color: var(--ink); }
+  .ptext b.acc { color: var(--accent); }
 
-  .table-wrap {
-    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
-    overflow: auto; max-height: 75vh;
-  }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th {
-    position: sticky; top: 0; background: var(--card); z-index: 1;
-    font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted);
-    box-shadow: inset 0 -1px 0 var(--line);
-  }
-  tr:last-child td { border-bottom: 0; }
-  td.num { color: var(--muted); font-variant-numeric: tabular-nums; }
-  td.dish { font-weight: 500; min-width: 180px; }
-  td.tick { color: var(--ok); font-weight: 700; text-align: center; }
-  td.date, td.rating { white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .links a {
-    display: inline-block; margin: 0 4px 4px 0; padding: 1px 7px; border-radius: 99px;
-    background: var(--accent-soft); color: var(--accent); font-size: 0.78rem; font-weight: 600; text-decoration: none;
-  }
-  .links a:hover { text-decoration: underline; }
-  td.photo { width: 1%; padding-right: 4px; }
-  .thumb {
-    display: block; width: 80px; height: 80px; border-radius: 8px;
-    background: var(--line); object-fit: cover;
-  }
-  a.thumb-link { display: block; border-radius: 8px; }
-  a.thumb-link:hover .thumb { opacity: 0.85; }
-  td.votes { white-space: nowrap; }
-  button.vote {
-    font: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer;
-    color: var(--accent); background: var(--accent-soft); border: 0; border-radius: 99px; padding: 3px 10px;
-  }
-  button.vote:hover:not(:disabled) { filter: brightness(0.95); }
-  button.vote:disabled { cursor: default; opacity: 0.5; }
-  tr.sep td { background: var(--bg); font-weight: 600; padding: 10px; }
-  .tag {
-    display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 99px;
-    background: var(--accent-soft); color: var(--accent); font-size: 0.78rem; font-weight: 600; white-space: nowrap;
-  }
-  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  .msg { padding: 28px; text-align: center; color: var(--muted); }
+  /* Tabs */
+  .tabbar { position: sticky; top: 0; z-index: 3; background: var(--bg); padding: 6px 0; margin-top: 14px; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; border-radius: 14px; background: var(--seg); }
+  .tab { height: 44px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-size: 14px; font-weight: 600; }
+  .tab[aria-selected="true"] { background: var(--paper); color: var(--accent); font-weight: 700; box-shadow: 0 1px 3px rgba(60,35,15,.15); }
 
-  @media (max-width: 640px) {
-    h1 { font-size: 1.4rem; }
-    .cover { height: 80px; }
-    .count { margin-left: 0; width: 100%; }
-    th, td { padding: 8px 7px; font-size: 0.88rem; }
-    .hide-sm { display: none; }
-    .thumb { width: 56px; height: 56px; }
-  }
+  .panel { display: flex; flex-direction: column; gap: 22px; padding: 10px 0 120px; }
+  .panel[hidden] { display: none; }
+  .panel h2 { font-size: 34px; line-height: 1.02; text-wrap: balance; }
+  .lede { margin: 6px 0 0; font-size: 15px; color: var(--muted); line-height: 1.4; }
+  .rule { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--ink); padding-bottom: 6px; }
+  .rule h3 { font-size: 20px; }
+  .rule span { font-size: 12px; color: var(--muted); }
+  .meta { font-size: 12px; color: var(--muted); }
+  .mono { font-family: var(--mono); font-weight: 500; font-size: 11px; }
+  .mine { color: var(--accent); font-weight: 600; }
+  .empty { color: var(--muted); margin: 0; }
+
+  /* Vote tab */
+  .top3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: flex; align-items: center; gap: 14px; }
+  .rank { font: italic 600 44px/1 var(--serif); color: var(--accent); width: 30px; text-align: center; flex: none; }
+  .card .name { font: 600 18px/1.15 var(--serif); }
+  .card .body, .row .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+  .btn-big { flex: none; width: 60px; height: 60px; border-radius: 14px; border: 0; background: var(--accent); color: var(--paper); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
+  .btn-big b { font-size: 22px; line-height: 1; font-weight: 600; }
+  .btn-big span { font-size: 13px; font-weight: 700; }
+  .btn-big:hover:not(:disabled) { background: var(--accent-hover); }
+  .open { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 460px), 1fr)); column-gap: 28px; }
+  .row { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .row .name { font-weight: 600; font-size: 15px; line-height: 1.25; }
+  .btn-vote { flex: none; min-width: 68px; height: 44px; border-radius: 12px; border: 1.5px solid var(--accent); background: var(--paper); color: var(--accent); font-size: 15px; font-weight: 700; }
+  .btn-vote:hover:not(:disabled) { background: var(--accent-soft); }
+
+  /* Cooked tab */
+  .photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(46%, 240px), 1fr)); gap: 10px; }
+  .tile { position: relative; aspect-ratio: 4 / 5; border-radius: 14px; overflow: hidden; text-decoration: none; display: flex; flex-direction: column; justify-content: space-between; background: repeating-linear-gradient(135deg, #e2cdb4 0 9px, #eadac5 9px 18px); }
+  .tile img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .badge { position: relative; align-self: flex-start; margin: 8px; padding: 3px 7px; border-radius: 6px; background: rgba(251,247,239,.92); font-size: 12px; font-weight: 600; color: var(--accent); }
+  .caption { position: relative; margin-top: auto; padding: 28px 10px 10px; background: linear-gradient(transparent, rgba(43,33,26,.85)); display: flex; flex-direction: column; gap: 2px; }
+  .caption .name { font: 600 16px/1.15 var(--serif); color: var(--paper); }
+  .caption .meta { font-size: 11px; color: #f1e6d6; }
+
+  /* All tab */
+  #tab-all { gap: 10px; padding-top: 6px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; }
+  .search { flex: 1 1 200px; height: 44px; border-radius: 12px; border: 1px solid var(--border); background: var(--paper); padding: 0 14px; font: 15px var(--sans); color: var(--ink); outline: none; min-width: 0; }
+  .toggle { flex: none; height: 44px; border-radius: 12px; border: 1px solid var(--border); background: var(--paper); padding: 0 12px; font-size: 14px; font-weight: 500; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+  .box { width: 20px; height: 20px; border-radius: 6px; border: 1.5px solid #b9a88f; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+  .toggle[aria-pressed="true"] .box { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+  .chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }
+  .chip { flex: none; height: 36px; padding: 0 14px; border-radius: 99px; border: 1px solid var(--border); background: var(--paper); color: var(--ink); font-size: 13px; font-weight: 500; }
+  .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 600; }
+  .group .rule { padding: 14px 0 6px; }
+  .group .rule h3 { font-size: 19px; }
+  .pg { width: 34px; flex: none; color: var(--muted); }
+  .thumb { width: 52px; height: 52px; flex: none; border-radius: 10px; overflow: hidden; background: repeating-linear-gradient(135deg, #e5d2bb 0 5px, #ecdcc8 5px 10px); display: block; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .posted { display: flex; gap: 8px; flex-wrap: wrap; font-size: 12px; }
+  .posted .ok { color: var(--green); font-weight: 600; }
+  .posted .star, .posted a { color: var(--accent); font-weight: 600; }
+  .btn-sm { flex: none; min-width: 60px; height: 44px; border-radius: 12px; border: 1px solid var(--border); background: var(--paper); color: var(--ink); font-size: 14px; font-weight: 700; }
+  .btn-sm:hover:not(:disabled) { background: var(--accent-soft); }
+
+  /* Sticky votes-left bar */
+  .dock { position: sticky; bottom: 0; z-index: 4; padding: 10px 12px 14px; display: flex; justify-content: center; pointer-events: none; margin: 0 -16px; }
+  .dockbar { pointer-events: auto; max-width: 520px; width: 100%; background: var(--ink); color: var(--paper); border-radius: 16px; padding: 10px 10px 10px 16px; display: flex; align-items: center; gap: 12px; box-shadow: 0 10px 30px rgba(43,33,26,.3); }
+  .dockbar .body { flex: 1; display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .dockbar .label { font-weight: 700; font-size: 15px; }
+  .dockbar .notice { font-size: 12px; color: var(--pip); }
+  .pips { display: flex; gap: 2px; }
+  .pips i { flex: 1; max-width: 12px; height: 5px; border-radius: 2px; background: rgba(251,247,239,.2); }
+  .pips i.on { background: var(--pip); }
+  .btn-go { flex: none; height: 44px; padding: 0 16px; border-radius: 11px; border: 0; background: var(--accent); color: var(--paper); font-size: 14px; font-weight: 700; }
+  .btn-go:hover { background: var(--accent-hover); }
+
+  /* Loading placeholders */
+  .ph { background: var(--seg); border-radius: 12px; min-height: 60px; }
+  .error { color: var(--muted); }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
+<div class="page">
+  <header class="head">
     <img class="cover" src="dinner.jpg" alt="Dinner by Nagi Maehashi, book cover">
     <div>
-    <h1>Cooking every dish in Dinner</h1>
-    <p class="sub">Nagi’s cookbook, cooked by <a href="https://www.reddit.com/user/Maxinbxl/" target="_blank" rel="noopener">u/Maxinbxl</a>, one dish at a time.</p>
+      <h1>Cooking every dish in Dinner</h1>
+      <p>Nagi’s cookbook, cooked by <a href="https://www.reddit.com/user/Maxinbxl/">u/Maxinbxl</a>, one dish at a time.</p>
     </div>
   </header>
 
-  <div class="stats">
-    <div class="stat"><b id="s-posted">–</b><span>posted</span></div>
-    <div class="stat"><b id="s-left">–</b><span>remaining</span></div>
-    <div class="stat"><b id="s-pct">–</b><span>complete</span></div>
-  </div>
-  <div class="bar"><i id="bar"></i></div>
-
-  <div class="controls">
-    <input id="q" type="search" placeholder="Search dish, chapter or page…" aria-label="Search">
-    <select id="chapter" aria-label="Chapter"><option value="">All chapters</option></select>
-    <label><input id="posted" type="checkbox"> Posted only</label>
-    <span class="count" id="count"></span>
+  <div class="progress">
+    <div class="track"><i id="bar"></i></div>
+    <span class="ptext" id="ptext"><b>–</b> posted · <b>–</b> left · <b class="acc">–</b></span>
   </div>
 
-  <div class="table-wrap">
-    <table>
-      <thead>
-        <tr>
-          <th><span class="sr-only">Photo</span></th><th class="hide-sm">Page</th><th>Dish</th>
-          <th>Posted</th><th>Date</th><th>Rating</th><th>Links</th><th class="votes">Vote</th>
-        </tr>
-      </thead>
-      <tbody id="rows"><tr><td colspan="8" class="msg">Loading…</td></tr></tbody>
-    </table>
+  <div class="tabbar">
+    <div class="seg" role="tablist">
+      <button class="tab" role="tab" data-tab="vote" aria-selected="true">Vote next</button>
+      <button class="tab" role="tab" data-tab="cooked" aria-selected="false">Cooked</button>
+      <button class="tab" role="tab" data-tab="all" aria-selected="false">All dishes</button>
+    </div>
+  </div>
+
+  <section class="panel" id="tab-vote">
+    <div>
+      <h2>What should I cook next?</h2>
+      <p class="lede">You have 20 votes. Spend them all on one dish or spread them out.</p>
+    </div>
+    <div class="top3" id="top3"></div>
+    <div>
+      <div class="rule"><h3>Every uncooked dish</h3><span>Most votes first</span></div>
+      <div class="open" id="open"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-cooked" hidden>
+    <div>
+      <h2 id="cooked-title">Dishes cooked</h2>
+      <p class="lede">Newest first. Tap any photo to open the Reddit post.</p>
+    </div>
+    <div class="photos" id="photos"></div>
+  </section>
+
+  <section class="panel" id="tab-all" hidden>
+    <div class="controls">
+      <input class="search" id="q" type="search" placeholder="Search dish or page" aria-label="Search dish or page">
+      <button class="toggle" id="posted-only" aria-pressed="false"><span class="box"></span>Posted only</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div id="groups"></div>
+  </section>
+
+  <div class="dock">
+    <div class="dockbar">
+      <div class="body">
+        <span class="label" id="left-label">20 votes left</span>
+        <div class="pips" id="pips"></div>
+      </div>
+      <button class="btn-go" id="go-vote">Vote</button>
+    </div>
   </div>
 </div>
 
 <script>
-  const TICK = "✓";
-  let dishes = [];
-
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const done = (v) => String(v ?? "").trim() === TICK;
   const chapterOf = (page) => (CHAPTERS.filter(([start]) => Number(page) >= start).pop() || CHAPTERS[0])[1];
+  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+  let dishes = [];
+  let loadError = false;
   let votes = {};          // dish # -> vote count
   let votesLeft = null;    // votes this visitor has left, once known
+  let myVotes = {};        // dish # -> votes this visitor gave it (kept in localStorage)
+  let voteOrder = [];      // uncooked dishes sorted by votes; refreshed only when the Vote tab opens
+  let tab = "vote";
+  let q = "", chapter = "all", postedOnly = false;
+  let notice = "";
 
-  // Pull the Reddit URLs out of a "Post link" cell.
-  function extractLinks(cell) {
-    const found = String(cell ?? "").match(/(?:https?:\/\/)?(?:[a-z0-9-]+\.)+[a-z]{2,}\/[^\s|]*/gi) || [];
-    return found.map((raw) => {
-      const url = /^https?:\/\//i.test(raw) ? raw : "https://" + raw;
-      const host = url.replace(/^https?:\/\/(www\.)?/i, "").toLowerCase();
-      let label = "Link";
-      if (host.startsWith("reddit.com")) label = "Reddit";
-      return { url, label };
-    }).filter((l) => l.label === "Reddit");
+  try { myVotes = JSON.parse(localStorage.getItem("myVotes") || "{}"); } catch {}
+
+  // Sheet dates come as 2026-09-12, 10/08/2026 (day first) or 25 Aug 2026.
+  function parseDate(s) {
+    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) return new Date(+m[1], m[2] - 1, +m[3]);
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) return new Date(+m[3], m[2] - 1, +m[1]);
+    const d = new Date(s);
+    return isNaN(d) ? null : d;
+  }
+  const dateLabel = (d) => (d.dateObj ? `${d.dateObj.getDate()} ${MONTHS[d.dateObj.getMonth()]}` : d.date);
+  const redditLink = (cell) => (String(cell ?? "").match(/https?:\/\/(?:www\.)?reddit\.com\/[^\s|]*/i) || [""])[0];
+
+  const count = (n) => votes[n] || 0;
+  const noVotes = () => votesLeft === 0;
+  const mineLabel = (n) => (myVotes[n] ? `<span class="mine">you +${myVotes[n]}</span>` : "");
+  const aria = (d) => `aria-label="Vote for ${esc(d.dish)}, ${count(d.n)} votes"`;
+  const pageLabel = (d) => `<span class="mono">p.${esc(d.page)}</span>`;
+
+  /* ---------- Rendering ---------- */
+
+  function renderHeader() {
+    const total = dishes.length;
+    const posted = dishes.filter((d) => d.posted).length;
+    const pct = total ? (posted / total) * 100 : 0;
+    $("bar").style.width = pct + "%";
+    $("ptext").innerHTML = total
+      ? `<b>${posted}</b> posted · <b>${total - posted}</b> left · <b class="acc">${pct.toFixed(1)}%</b>`
+      : `<b>–</b> posted · <b>–</b> left · <b class="acc">–</b>`;
+    $("cooked-title").textContent = total ? `${posted} dishes cooked` : "Dishes cooked";
   }
 
-  // Square thumbnail (or same-size placeholder); clicks through to the Reddit post.
-  function thumb(d) {
-    if (!d.photo) return `<span class="thumb"></span>`;
-    const img = `<img class="thumb" src="${esc(d.photo)}" alt="${esc(d.dish)}" loading="lazy">`;
-    const post = d.links[0];
-    return post ? `<a class="thumb-link" href="${esc(post.url)}" target="_blank" rel="noopener">${img}</a>` : img;
+  function placeholders(target, n, cls) {
+    $(target).innerHTML = loadError
+      ? `<p class="error">Couldn't load the dish list. Refresh to try again.</p>`
+      : Array.from({ length: n }, () => `<div class="ph ${cls || ""}"></div>`).join("");
+  }
+
+  function sortOpen() {
+    voteOrder = dishes.filter((d) => !d.posted).sort((a, b) => count(b.n) - count(a.n) || Number(a.page) - Number(b.page));
+  }
+
+  function renderVote() {
+    if (!dishes.length) { placeholders("top3", 3); placeholders("open", 8); return; }
+    const off = noVotes() ? " disabled" : "";
+    $("top3").innerHTML = voteOrder.slice(0, 3).map((d, i) => `
+      <div class="card">
+        <span class="rank">${i + 1}</span>
+        <div class="body">
+          <span class="name">${esc(d.dish)}</span>
+          <span class="meta">${esc(d.chapter)} · p.${esc(d.page)}</span>
+        </div>
+        <button class="btn-big" data-n="${esc(d.n)}" ${aria(d)}${off}><b>+</b><span>${count(d.n)}</span></button>
+      </div>`).join("");
+    $("open").innerHTML = voteOrder.map((d) => `
+      <div class="row">
+        <div class="body">
+          <span class="name">${esc(d.dish)}</span>
+          <span class="meta">${esc(d.chapter)} · ${pageLabel(d)} ${mineLabel(d.n)}</span>
+        </div>
+        <button class="btn-vote" data-n="${esc(d.n)}" ${aria(d)}${off}>+ ${count(d.n)}</button>
+      </div>`).join("");
+  }
+
+  function renderCooked() {
+    if (!dishes.length) { placeholders("photos", 6, "tile"); return; }
+    const cooked = dishes.filter((d) => d.posted).sort((a, b) => (b.dateObj || 0) - (a.dateObj || 0));
+    $("photos").innerHTML = cooked.map((d) => {
+      const tag = d.reddit ? `a href="${esc(d.reddit)}"` : "div";
+      return `
+      <${tag} class="tile">
+        ${d.photo ? `<img src="${esc(d.photo)}" alt="${esc(d.dish)}" loading="lazy">` : ""}
+        ${d.rating ? `<span class="badge">★ ${esc(d.rating)}</span>` : "<span></span>"}
+        <div class="caption">
+          <span class="name">${esc(d.dish)}</span>
+          <span class="meta">${esc(dateLabel(d))} · p.${esc(d.page)}</span>
+        </div>
+      </${d.reddit ? "a" : "div"}>`;
+    }).join("");
+  }
+
+  function renderChips() {
+    const names = ["all", ...CHAPTERS.map(([, c]) => c)];
+    $("chips").innerHTML = names.map((c) => `<button class="chip" data-chapter="${esc(c)}" aria-pressed="${c === chapter}">${c === "all" ? "All" : esc(c)}</button>`).join("");
+  }
+
+  function renderAll() {
+    renderChips();
+    $("posted-only").setAttribute("aria-pressed", postedOnly);
+    $("posted-only").querySelector(".box").textContent = postedOnly ? "✓" : "";
+    if (!dishes.length) { placeholders("groups", 6); return; }
+    const needle = q.trim().toLowerCase();
+    const shown = dishes.filter((d) =>
+      (!needle || d.dish.toLowerCase().includes(needle) || d.page === needle) &&
+      (chapter === "all" || d.chapter === chapter) &&
+      (!postedOnly || d.posted));
+    const off = noVotes() ? " disabled" : "";
+    const groups = CHAPTERS.map(([, c]) => {
+      const rows = shown.filter((d) => d.chapter === c);
+      if (!rows.length) return "";
+      const all = dishes.filter((d) => d.chapter === c);
+      const done = all.filter((d) => d.posted).length;
+      return `
+      <div class="group">
+        <div class="rule"><h3>${esc(c)}</h3><span>${done} of ${all.length} cooked</span></div>
+        ${rows.map((d) => `
+        <div class="row">
+          <span class="pg mono">p.${esc(d.page)}</span>
+          ${d.posted ? `<a class="thumb" href="${esc(d.reddit)}" aria-label="${esc(d.dish)} on Reddit">${d.photo ? `<img src="${esc(d.photo)}" alt="" loading="lazy">` : ""}</a>` : ""}
+          <div class="body">
+            <span class="name">${esc(d.dish)}</span>
+            ${d.posted ? `<span class="posted"><span class="ok">✓ Posted ${esc(dateLabel(d))}</span>${d.rating ? `<span class="star">★ ${esc(d.rating)}</span>` : ""}${d.reddit ? `<a href="${esc(d.reddit)}">Reddit ↗</a>` : ""}</span>` : ""}
+          </div>
+          ${d.posted ? "" : `<button class="btn-sm" data-n="${esc(d.n)}" ${aria(d)}${off}>+ ${count(d.n)}</button>`}
+        </div>`).join("")}
+      </div>`;
+    }).join("");
+    $("groups").innerHTML = groups || `<p class="empty">No dishes match.</p>`;
+  }
+
+  function renderDock() {
+    const left = votesLeft ?? TOTAL_VOTES;
+    $("left-label").textContent = notice ? notice : left === 0 ? "No votes left, thanks!" : left === 1 ? "1 vote left" : `${left} votes left`;
+    $("left-label").className = notice ? "label notice" : "label";
+    $("pips").innerHTML = Array.from({ length: TOTAL_VOTES }, (_, i) => `<i class="${i < left ? "on" : ""}"></i>`).join("");
   }
 
   function render() {
-    const q = $("q").value.trim().toLowerCase();
-    const chapter = $("chapter").value;
-    const postedOnly = $("posted").checked;
-
-    const shown = dishes.filter((d) =>
-      (!chapter || d.chapter === chapter) &&
-      (!postedOnly || d.posted) &&
-      (!q || d.dish.toLowerCase().includes(q) || d.chapter.toLowerCase().includes(q) || d.page.toLowerCase().includes(q))
-    );
-
-    const left = votesLeft === null ? "" : ` · ${votesLeft} vote${votesLeft === 1 ? "" : "s"} left`;
-    $("count").textContent = `${shown.length} of ${dishes.length} dishes${left}`;
-    const row = (d) => `
-      <tr>
-        <td class="photo">${thumb(d)}</td>
-        <td class="num hide-sm">${esc(d.page)}</td>
-        <td class="dish">${esc(d.dish)}</td>
-        <td class="tick">${d.posted ? TICK : ""}</td>
-        <td class="date">${esc(d.date)}</td>
-        <td class="rating">${esc(d.rating)}</td>
-        <td class="links">${d.links.map((l) => `<a href="${esc(l.url)}" target="_blank" rel="noopener">${l.label}</a>`).join("")}</td>
-        <td class="votes">${voteButton(d)}</td>
-      </tr>`;
-
-    // One separator row per chapter, tagged with that chapter's posted count.
-    const separator = (c) => {
-      const all = dishes.filter((d) => d.chapter === c);
-      const posted = all.filter((d) => d.posted).length;
-      return `<tr class="sep"><td colspan="8">${esc(c)}<span class="tag">${posted} / ${all.length} posted</span></td></tr>`;
-    };
-
-    $("rows").innerHTML = shown.length
-      ? CHAPTERS.map(([, c]) => {
-          const rows = shown.filter((d) => d.chapter === c);
-          return rows.length ? separator(c) + rows.map(row).join("") : "";
-        }).join("")
-      : `<tr><td colspan="8" class="msg">No dishes match.</td></tr>`;
+    renderHeader();
+    renderDock();
+    if (tab === "vote") renderVote();
+    else if (tab === "cooked") renderCooked();
+    else renderAll();
   }
 
-  // Voting is only open on dishes that haven't been posted yet.
-  function voteButton(d) {
-    if (d.posted) return "";
-    const off = !VOTE_URL || votesLeft === 0 ? " disabled" : "";
-    const title = !VOTE_URL ? "Voting opens soon" : votesLeft === 0 ? "You have used all your votes" : "Vote for this dish next";
-    return `<button class="vote" data-n="${esc(d.n)}" title="${title}"${off}>▲ ${votes[d.n] || 0}</button>`;
+  function showTab(name, scroll) {
+    tab = ["vote", "cooked", "all"].includes(name) ? name : "vote";
+    document.querySelectorAll(".tab").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === tab));
+    document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== "tab-" + tab));
+    history.replaceState(null, "", "#" + tab);
+    if (tab === "vote") sortOpen();
+    render();
+    if (scroll) window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  /* ---------- Voting ---------- */
+
+  function flash(msg) {
+    notice = msg;
+    renderDock();
+    setTimeout(() => { notice = ""; renderDock(); }, 3000);
+  }
+
+  async function vote(n) {
+    if (noVotes()) return;
+    // Optimistic update, rolled back if the request fails.
+    votes[n] = count(n) + 1;
+    if (votesLeft !== null) votesLeft--;
+    myVotes[n] = (myVotes[n] || 0) + 1;
+    render();
+    try {
+      const r = await fetch(VOTE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dish: n }) });
+      const data = await r.json();
+      if (r.status === 429) { votes[n]--; myVotes[n]--; votesLeft = 0; render(); return; }
+      if (!r.ok) throw new Error(data.error);
+      votes[n] = data.votes;
+      votesLeft = data.remaining;
+      localStorage.setItem("myVotes", JSON.stringify(myVotes));
+      render();
+    } catch {
+      votes[n]--; myVotes[n]--;
+      if (votesLeft !== null) votesLeft++;
+      render();
+      flash("Vote didn't go through, try again");
+    }
   }
 
   async function loadVotes() {
@@ -241,76 +405,60 @@
       const data = await (await fetch(VOTE_URL)).json();
       votes = data.votes || {};
       votesLeft = data.remaining ?? null;
+      if (tab === "vote") sortOpen();
       render();
     } catch {}
   }
 
-  async function vote(n) {
-    try {
-      const r = await fetch(VOTE_URL, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dish: n }) });
-      const data = await r.json();
-      if (r.status === 429) { votesLeft = 0; render(); return; }
-      if (!r.ok) throw new Error(data.error);
-      votes[n] = data.votes;
-      votesLeft = data.remaining;
-      render();
-    } catch {
-      alert("Couldn't register your vote. Please try again.");
-    }
-  }
-
-  function summarise() {
-    const total = dishes.length;
-    const posted = dishes.filter((d) => d.posted).length;
-    const pct = total ? (posted / total) * 100 : 0;
-    $("s-posted").textContent = posted;
-    $("s-left").textContent = total - posted;
-    $("s-pct").textContent = pct.toFixed(1) + "%";
-    $("bar").style.width = pct + "%";
-  }
+  /* ---------- Data ---------- */
 
   function load() {
-    // Cache-buster so a reload always asks Google for the latest sheet.
-    const url = CSV_URL + "&_=" + Date.now();
-    Papa.parse(url, {
-      download: true,
-      header: true,
-      skipEmptyLines: true,
+    Papa.parse(CSV_URL + "&_=" + Date.now(), {
+      download: true, header: true, skipEmptyLines: true,
       complete: ({ data }) => {
-        dishes = data
-          .filter((r) => (r["Dish"] || "").trim())
-          .map((r) => ({
+        dishes = data.filter((r) => (r["Dish"] || "").trim()).map((r) => {
+          const date = (r["Date posted"] || "").trim();
+          return {
             n: (r["#"] || "").trim(),
             page: (r["Page"] || "").trim(),
             chapter: chapterOf((r["Page"] || "").trim()),
             dish: (r["Dish"] || "").trim(),
-            cooked: done(r["Cooked"]),
-            posted: done(r["Posted"]),
-            date: (r["Date posted"] || "").trim(),
+            posted: (r["Posted"] || "").trim() === "✓",
+            date, dateObj: date ? parseDate(date) : null,
             rating: (r["Rating"] || "").trim(),
-            links: extractLinks(r["Post link"]),
+            reddit: redditLink(r["Post link"]),
             photo: (r["Photo URL"] || "").trim(),
-          }));
-
-        const present = new Set(dishes.map((d) => d.chapter));
-        $("chapter").insertAdjacentHTML("beforeend", CHAPTERS.filter(([, c]) => present.has(c)).map(([, c]) => `<option>${esc(c)}</option>`).join(""));
-
-        summarise();
+          };
+        });
+        sortOpen();
         render();
       },
-      error: () => {
-        $("rows").innerHTML = `<tr><td colspan="8" class="msg">Couldn't load the tracker. Try reloading.</td></tr>`;
-      },
+      error: () => { loadError = true; render(); },
     });
   }
 
-  ["q", "chapter", "posted"].forEach((id) => $(id).addEventListener("input", render));
-  $("rows").addEventListener("click", (e) => {
-    const btn = e.target.closest("button.vote");
-    if (btn) { btn.disabled = true; vote(btn.dataset.n); }
+  /* ---------- Events ---------- */
+
+  document.querySelector(".seg").addEventListener("click", (e) => {
+    const b = e.target.closest(".tab");
+    if (b) showTab(b.dataset.tab);
   });
+  $("go-vote").addEventListener("click", () => showTab("vote", true));
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-n]");
+    if (b) vote(b.dataset.n);
+  });
+  $("q").addEventListener("input", (e) => { q = e.target.value; renderAll(); });
+  $("posted-only").addEventListener("click", () => { postedOnly = !postedOnly; renderAll(); });
+  $("chips").addEventListener("click", (e) => {
+    const c = e.target.closest(".chip");
+    if (c) { chapter = c.dataset.chapter; renderAll(); }
+  });
+  window.addEventListener("hashchange", () => showTab(location.hash.slice(1)));
+
+  showTab(location.hash.slice(1));
   load();
-  if (VOTE_URL) loadVotes();
+  loadVotes();
 </script>
 </body>
 </html>
