@@ -1,7 +1,7 @@
 # Vote backend
 
 The site is static (GitHub Pages), so votes are stored by this small Cloudflare Worker
-with a D1 database. Each IP address gets 20 votes in total; IPs are stored as SHA-256 hashes.
+with a D1 database. Each IP address gets 10 votes per day (midnight Sydney time); IPs are stored as SHA-256 hashes.
 
 ## Deploy with Wrangler
 

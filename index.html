@@ -13,7 +13,7 @@
   const CSV_URL = "https://docs.google.com/spreadsheets/d/1f557VxAxSyOM9xvwQzXwrZx2TLdZa1gD2oo1UwQ-5FI/gviz/tq?tqx=out:csv&sheet=Public";
   // Votes: URL of the deployed Cloudflare Worker in worker/.
   const VOTE_URL = "https://cooking-votes.maxboucoiran.workers.dev/";
-  const TOTAL_VOTES = 20;
+  const TOTAL_VOTES = 10; // per visitor per day; must match LIMIT in worker/vote.js
   // Dishes that can't be voted for (button shown greyed out).
   const NO_VOTE = ["Beef Wellington"];
   // Chapters of the book, with the page each one starts on.
@@ -173,7 +173,7 @@
   <section class="panel" id="tab-vote">
     <div>
       <h2>What should I cook next?</h2>
-      <p class="lede">You have 20 votes. Spend them all on one dish or spread them out.</p>
+      <p class="lede">You have 10 votes a day. Spend them all on one dish or spread them out.</p>
     </div>
     <div class="top3" id="top3"></div>
     <div>
@@ -202,7 +202,7 @@
   <div class="dock">
     <div class="dockbar">
       <div class="body">
-        <span class="label" id="left-label">20 votes left</span>
+        <span class="label" id="left-label">10 votes left</span>
         <div class="pips" id="pips"></div>
       </div>
       <button class="btn-go" id="go-vote">Vote</button>
@@ -367,7 +367,7 @@
 
   function renderDock() {
     const left = votesLeft ?? TOTAL_VOTES;
-    $("left-label").textContent = notice ? notice : left === 0 ? "No votes left, thanks!" : left === 1 ? "1 vote left" : `${left} votes left`;
+    $("left-label").textContent = notice ? notice : left === 0 ? "No votes left today, thanks!" : left === 1 ? "1 vote left today" : `${left} votes left today`;
     $("left-label").className = notice ? "label notice" : "label";
     $("pips").innerHTML = Array.from({ length: TOTAL_VOTES }, (_, i) => `<i class="${i < left ? "on" : ""}"></i>`).join("");
   }

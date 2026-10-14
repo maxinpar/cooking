@@ -1,8 +1,11 @@
 // Cloudflare Worker that stores votes in a D1 database (binding: DB).
 // GET  -> { votes: { "<dish #>": count }, voters: { "<dish #>": distinct voters }, mine: { "<dish #>": my votes }, remaining }
-// POST { dish } -> { votes: <new count>, voters, remaining } or 429 once the IP has used all its votes.
+// POST { dish } -> { votes: <new count>, voters, remaining } or 429 once the IP has used today's votes.
+// Each IP gets LIMIT votes per calendar day in TIMEZONE; the budget resets at midnight.
 
-const LIMIT = 20;
+const LIMIT = 10;
+const TIMEZONE = "Australia/Sydney";
+const today = () => new Date().toLocaleDateString("en-CA", { timeZone: TIMEZONE }); // YYYY-MM-DD
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -16,7 +19,7 @@ let ready;
 function init(db) {
   ready ??= db.batch([
     db.prepare("CREATE TABLE IF NOT EXISTS votes (dish TEXT PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0)"),
-    db.prepare("CREATE TABLE IF NOT EXISTS voters (ip TEXT PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS daily (ip TEXT, day TEXT, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (ip, day))"),
     db.prepare("CREATE TABLE IF NOT EXISTS ballots (ip TEXT, dish TEXT, n INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (ip, dish))"),
   ]);
   return ready;
@@ -38,7 +41,7 @@ export default {
     if (request.method === "GET") {
       const [{ results }, voter, counts, mine] = await Promise.all([
         env.DB.prepare("SELECT dish, n FROM votes").all(),
-        env.DB.prepare("SELECT n FROM voters WHERE ip = ?").bind(ip).first(),
+        env.DB.prepare("SELECT n FROM daily WHERE ip = ? AND day = ?").bind(ip, today()).first(),
         env.DB.prepare("SELECT dish, COUNT(*) AS n FROM ballots GROUP BY dish").all(),
         env.DB.prepare("SELECT dish, n FROM ballots WHERE ip = ?").bind(ip).all(),
       ]);
@@ -50,12 +53,12 @@ export default {
       const { dish } = await request.json().catch(() => ({}));
       if (!dish) return json({ error: "Missing dish" }, 400);
 
-      // Atomically count the vote against this IP; no row comes back once the limit is hit.
+      // Atomically count the vote against this IP for today; no row comes back once the limit is hit.
       const voter = await env.DB
-        .prepare("INSERT INTO voters (ip, n) VALUES (?, 1) ON CONFLICT(ip) DO UPDATE SET n = n + 1 WHERE n < ? RETURNING n")
-        .bind(ip, LIMIT)
+        .prepare("INSERT INTO daily (ip, day, n) VALUES (?, ?, 1) ON CONFLICT(ip, day) DO UPDATE SET n = n + 1 WHERE n < ? RETURNING n")
+        .bind(ip, today(), LIMIT)
         .first();
-      if (!voter) return json({ error: `You have used all ${LIMIT} votes`, remaining: 0 }, 429);
+      if (!voter) return json({ error: `You have used today's ${LIMIT} votes`, remaining: 0 }, 429);
 
       const [row, , voters] = await env.DB.batch([
         env.DB.prepare("INSERT INTO votes (dish, n) VALUES (?, 1) ON CONFLICT(dish) DO UPDATE SET n = n + 1 RETURNING n").bind(String(dish)),
