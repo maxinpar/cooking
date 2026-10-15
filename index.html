@@ -367,7 +367,7 @@
 
   function renderDock() {
     const left = votesLeft ?? TOTAL_VOTES;
-    $("left-label").textContent = notice ? notice : left === 0 ? "No votes left today, thanks!" : left === 1 ? "1 vote left today" : `${left} votes left today`;
+    $("left-label").textContent = notice ? notice : left === 0 ? "No votes left today, more at midnight!" : left === 1 ? "1 vote left today" : `${left} votes left today`;
     $("left-label").className = notice ? "label notice" : "label";
     $("pips").innerHTML = Array.from({ length: TOTAL_VOTES }, (_, i) => `<i class="${i < left ? "on" : ""}"></i>`).join("");
   }
