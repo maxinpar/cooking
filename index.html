@@ -359,7 +359,7 @@
             ${d.posted ? `<span class="posted"><span class="ok">✓ Posted ${esc(dateLabel(d))}</span>${d.rating ? `<span class="star">★ ${esc(d.rating)}</span>` : ""}${d.reddit ? `<a href="${esc(d.reddit)}">Reddit ↗</a>` : ""}</span>` : ""}
           </div>
           ${d.posted
-            ? `<button class="btn-sm" title="Cooked, voting closed" aria-label="${esc(d.dish)} got ${count(d.n)} votes before it was cooked" disabled>+ ${count(d.n)}</button>`
+            ? `<button class="btn-sm" title="Cooked, voting closed" aria-label="${esc(d.dish)} got ${count(d.n)} votes before it was cooked" disabled>${count(d.n) ? "+ " + count(d.n) : "–"}</button>`
             : `<button class="btn-sm" ${btnAttrs(d)}>+ ${count(d.n)}</button>`}
         </div>`).join("")}
       </div>`;
